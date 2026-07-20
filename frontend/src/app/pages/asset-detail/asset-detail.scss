@@ -1,0 +1,179 @@
+.detail {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 1rem;
+  color: #374151;
+  text-decoration: none;
+  font-size: 0.85rem;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.error {
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.detail-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+
+  h1 {
+    font-size: 1.35rem;
+    color: #111827;
+    margin: 0;
+  }
+
+  .asset-id {
+    color: #6b7280;
+    font-size: 0.8rem;
+  }
+}
+
+.fields-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.field {
+  display: flex;
+  gap: 0.5rem;
+
+  dt {
+    width: 110px;
+    flex-shrink: 0;
+    color: #6b7280;
+    font-size: 0.8rem;
+  }
+
+  dd {
+    margin: 0;
+    color: #111827;
+    font-size: 0.9rem;
+  }
+}
+
+.edit-btn {
+  margin-top: 1.25rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid #1f2937;
+  background: #fff;
+  color: #1f2937;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+
+  &:hover {
+    background: #1f2937;
+    color: #fff;
+  }
+}
+
+.owner-note {
+  margin: 1.25rem 0 0;
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.admin-note {
+  color: #9ca3af;
+  font-weight: normal;
+}
+
+input,
+textarea {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+
+  &:focus {
+    outline: 2px solid #1f2937;
+    outline-offset: 1px;
+  }
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+
+  button {
+    padding: 0.5rem 1.1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+
+  button[type='submit'] {
+    border: none;
+    background: #1f2937;
+    color: #fff;
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    &:not(:disabled):hover {
+      background: #111827;
+    }
+  }
+
+  .cancel {
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #374151;
+  }
+}
+
+.metrics h2 {
+  font-size: 1rem;
+  color: #111827;
+  margin: 0 0 0.75rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.no-data {
+  color: #9ca3af;
+  font-size: 0.85rem;
+}

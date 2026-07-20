@@ -1,0 +1,99 @@
+<app-top-bar />
+
+<main class="detail">
+  <a routerLink="/assets" class="back-link">&larr; Back to assets</a>
+
+  @if (loading()) {
+    <p>Loading…</p>
+  } @else if (loadError()) {
+    <p class="error">{{ loadError() }}</p>
+  } @else if (asset(); as a) {
+    <header class="detail-header">
+      <h1>{{ a.name }}</h1>
+      <span class="asset-id">Asset ID: {{ a.id }}</span>
+    </header>
+
+    <section class="fields-card">
+      @if (!editing()) {
+        <dl>
+          <div class="field">
+            <dt>Description</dt>
+            <dd>{{ a.description || '—' }}</dd>
+          </div>
+          <div class="field">
+            <dt>Location</dt>
+            <dd>{{ a.location || '—' }}</dd>
+          </div>
+          <div class="field">
+            <dt>Owner</dt>
+            <dd>{{ a.owner || '—' }}</dd>
+          </div>
+          <div class="field">
+            <dt>Created</dt>
+            <dd>{{ a.created_at | date: 'medium' }}</dd>
+          </div>
+        </dl>
+        @if (canEdit()) {
+          <button type="button" class="edit-btn" (click)="startEdit()">Edit</button>
+        } @else {
+          <p class="owner-note">Only this asset's owner ({{ a.owner }}) can edit it.</p>
+        }
+      } @else {
+        <form [formGroup]="form" (ngSubmit)="save()">
+          <label>
+            Name
+            <input type="text" formControlName="name" />
+          </label>
+          <label>
+            Description
+            <textarea formControlName="description" rows="3"></textarea>
+          </label>
+          <label>
+            Location
+            <input type="text" formControlName="location" />
+          </label>
+          @if (isAdmin()) {
+            <label>
+              Owner <span class="admin-note">(admin only)</span>
+              <input
+                type="text"
+                formControlName="owner"
+                placeholder="username, or leave blank to unassign"
+              />
+            </label>
+          }
+
+          @if (saveError()) {
+            <p class="error">{{ saveError() }}</p>
+          }
+
+          <div class="form-actions">
+            <button type="submit" [disabled]="saving()">
+              {{ saving() ? 'Saving…' : 'Save changes' }}
+            </button>
+            <button type="button" class="cancel" (click)="cancelEdit()" [disabled]="saving()">
+              Cancel
+            </button>
+          </div>
+        </form>
+      }
+    </section>
+
+    <section class="metrics">
+      <h2>Sensor Metrics</h2>
+      @if (a.sensor_metrics.length === 0) {
+        <p class="no-data">No sensor readings for this asset yet.</p>
+      } @else {
+        <div class="metrics-grid">
+          @for (series of a.sensor_metrics; track series.metric) {
+            <app-time-series-chart
+              [title]="series.metric.replaceAll('_', ' ')"
+              [unit]="series.unit"
+              [readings]="series.readings"
+            />
+          }
+        </div>
+      }
+    </section>
+  }
+</main>

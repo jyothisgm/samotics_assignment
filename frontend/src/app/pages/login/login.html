@@ -1,0 +1,52 @@
+<div class="auth-screen">
+  <div class="auth-card">
+    <h1>Motor Asset Manager</h1>
+
+    <div class="mode-toggle">
+      <button
+        type="button"
+        [class.active]="mode() === 'login'"
+        (click)="setMode('login')"
+      >
+        Log in
+      </button>
+      <button
+        type="button"
+        [class.active]="mode() === 'register'"
+        (click)="setMode('register')"
+      >
+        Register
+      </button>
+    </div>
+
+    <form [formGroup]="form" (ngSubmit)="submit()">
+      <label>
+        Username
+        <input type="text" formControlName="username" autocomplete="username" />
+      </label>
+
+      <label>
+        Password
+        <input type="password" formControlName="password" autocomplete="current-password" />
+      </label>
+
+      @if (mode() === 'register') {
+        <p class="hint">Must be at least 6 characters.</p>
+      }
+
+      @if (error()) {
+        <p class="error">{{ error() }}</p>
+      }
+
+      <button type="submit" class="submit" [disabled]="loading()">
+        @if (loading()) {
+          Please wait…
+        } @else if (mode() === 'login') {
+          Log in
+        } @else {
+          Create account
+        }
+      </button>
+    </form>
+  </div>
+</div>

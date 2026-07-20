@@ -1,0 +1,35 @@
+<app-top-bar />
+
+<main class="assets">
+  <h1>Motor Assets</h1>
+
+  @if (error()) {
+    <p class="error">{{ error() }}</p>
+  }
+
+  <ul class="asset-list">
+    @for (asset of assets(); track asset.id) {
+      <li>
+        <a
+          class="asset-row"
+          [class.owned]="asset.is_owner"
+          [routerLink]="['/assets', asset.id]"
+        >
+          <span class="name">{{ asset.name }}</span>
+          <span class="location">{{ asset.location }}</span>
+          @if (asset.is_owner) {
+            <span class="owner-badge">Owner</span>
+          }
+        </a>
+      </li>
+    }
+  </ul>
+
+  <div #sentinel class="sentinel">
+    @if (loading()) {
+      <p>Loading…</p>
+    } @else if (!hasMore() && assets().length > 0) {
+      <p class="done">No more assets.</p>
+    }
+  </div>
+</main>

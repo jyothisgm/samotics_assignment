@@ -1,0 +1,89 @@
+.assets {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+h1 {
+  font-size: 1.35rem;
+  color: #111827;
+  margin: 0 0 1rem;
+}
+
+.error {
+  color: #b91c1c;
+  font-size: 0.9rem;
+}
+
+.asset-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.asset-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #e5e7eb;
+  border: 1px solid #d1d5db;
+  border-left: 4px solid #d1d5db;
+  border-radius: 6px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+
+  &:hover {
+    border-color: #9ca3af;
+    background: #dfe1e4;
+  }
+
+  &.owned {
+    background: #dbeafe;
+    border-color: #93c5fd;
+    border-left-color: #2563eb;
+
+    &:hover {
+      background: #cbe2fd;
+      border-color: #60a5fa;
+      border-left-color: #2563eb;
+    }
+  }
+}
+
+.name {
+  font-weight: 600;
+  color: #111827;
+  flex: 1;
+}
+
+.location {
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+
+.owner-badge {
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.sentinel {
+  text-align: center;
+  padding: 1.5rem 0;
+  color: #9ca3af;
+  font-size: 0.85rem;
+}
+
+.done {
+  color: #9ca3af;
+}

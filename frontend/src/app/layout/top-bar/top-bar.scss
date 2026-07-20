@@ -1,0 +1,38 @@
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: #1f2937;
+  color: #fff;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.user-name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.user-id {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.logout {
+  background: transparent;
+  border: 1px solid #4b5563;
+  color: #e5e7eb;
+  border-radius: 4px;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+
+  &:hover {
+    background: #374151;
+  }
+}
