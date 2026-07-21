@@ -194,14 +194,9 @@ value, rather than a custom synced crosshair + floating tooltip across all three
 That's a real reduction in interactivity polish, done deliberately for scope — this is a
 single lightweight internal page, not a monitoring dashboard.
 
-**Jasmine/Karma for unit tests, not Cypress.** Cypress was tried first (component
-testing, since e2e was also wanted down the line) — installed cleanly, but its Electron
-runner wouldn't launch in the sandbox this was built in (rejected its own standard
-startup flags even after a clean reinstall; unrelated to this app or to Angular 20).
+**Jasmine/Karma for unit tests.** 
 Angular's own scaffolded Karma/Jasmine setup runs headless Chrome, which does work
 there, and gives tests that are actually verified passing rather than trusted on faith.
-Cypress was subsequently removed entirely (`cypress.config.ts`, `cypress/`, and the
-`cypress`/`@cypress/angular` devDependencies) rather than left in as dead scaffolding.
 
 **`IntersectionObserver` is replaced with a hand-written fake in `assets-list.spec.ts`**
 (`FakeIntersectionObserver`, swapped onto `window.IntersectionObserver` for the test),

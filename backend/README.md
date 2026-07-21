@@ -294,16 +294,6 @@ scrypt-backed) and returns a short-lived (8h) signed token; every other route is
 in `@jwt_required()`. `JWT_SECRET_KEY` must be overridden via env var for anything beyond
 local dev — the `config.py` default is intentionally an obvious placeholder.
 
-**No separate `Client` model.** An earlier version modeled the industrial client as its
-own table (`id`, `name`), returned at login/register so the frontend could show "Client
-Name / Client ID." In practice there was only ever one client and nothing in the spec
-needed it to be a queryable, relatable entity of its own — every field it had was
-static display text. It's gone now: `User` is the only account/identity concept in the
-system, and login/register return the logged-in user's own `{id, username}` instead
-(see below). If real multi-tenancy shows up later — multiple clients with genuinely
-separated data — that's the point to reintroduce a `Client` (or similar) table with a
-`client_id` FK on `User`, not before.
-
 **`MotorAsset.owner_id` is a real FK to `users.id`**, not the plain-string
 username-matching this started as. `is_owner` (used by both `GET /assets` and `GET
 /assets/<id>`, plus the `PATCH` guard below) now lives as `MotorAsset.is_owned_by()`
@@ -427,13 +417,7 @@ which it generates through its own callback hooks rather than raising an
 `HTTPException`, so they're unaffected.
 
 **`/auth/login` and `/auth/register` return the logged-in user's own
-`{id, username, is_admin}`, not a separate client/company payload.** This used to be
-`Client` info (see the "no
-separate `Client` model" note above); once that model was removed, login/register
-needed *something* small identifying who's logged in for the frontend to display, and
-the user's own identity was already sitting right there — no new model, no new query.
-There's no dedicated `/me` or `/users/<id>` endpoint for this; with only one place that
-needs it, that would be speculative.
+`{id, username, is_admin}`
 
 **Tests run against in-memory SQLite, not the real Postgres/TimescaleDB instance.**
 The test suite exercises application logic — routing, auth, validation, ownership,
