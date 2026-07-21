@@ -21,7 +21,7 @@ See [backend/README.md](backend/README.md#setup--local-uv) and [frontend/README.
 
 ## Development timeline
 
-Built in roughly 6.5 hours, in four phases:
+Built in roughly 7.5 hours, in four phases:
 
 | Order | Phase | Duration | Steps |
 |---|---|---|---|
