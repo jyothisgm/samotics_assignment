@@ -107,123 +107,17 @@ npm test -- --watch=false --browsers=ChromeHeadless
 
 ## Design decisions
 
+**`/login` is public; everything else needs a token.**
+`app.routes.ts` only guards `/assets` and `/assets/:id` with `canActivate: [authGuard]`; `/login` has no guard, since that's the one page you can reach without being authenticated yet. The catch-all and empty-path routes both redirect to `/assets`, which then bounces to `/login` via the guard if there's no token, so there's a single place deciding "logged in or not," not a check repeated on every page.
+
+**User info is persisted from the login/register response.**
+The token only encodes the user's id (`sub`), not the username. `AuthService` stores `access_token` and `user` as two separate `localStorage` keys and exposes them as signals (`token`, `user`, computed `isAuthenticated`), restored on page load so a refresh doesn't log the user out.
+
 **Dev-server proxy instead of CORS on the backend.**
-A proxy needs zero backend changes. `ng serve --proxy-config proxy.conf.js` forwards
-`/auth`, `/assets`, and `/health` to `http://127.0.0.1:5000` server-side, so from the
-browser's point of view every request is same-origin.
-
-`127.0.0.1` is used on purpose instead of `localhost`. On this machine `localhost`
-resolves to `::1` first, and macOS's AirPlay Receiver was squatting on that port,
-silently swallowing every proxied request. A production build would still need a real
-CORS policy (or a reverse proxy) on the backend; this proxy only covers dev.
-
-**The proxy is a `.js` file with a bypass, not a plain `.json` path map.**
-The Angular route `/assets/:id` and the backend API path `/assets/:id` are the same
-URL. `HttpClient` needs that URL proxied to Flask, but a real browser navigation to it
-(typing it in, refreshing, opening a new tab) needs the SPA shell (`index.html`)
-instead, or the app never boots and there's no router left to redirect anywhere.
-
-`bypass` checks `Sec-Fetch-Mode`. Browsers set it to `navigate` on real page loads and
-something else on `fetch`/`XHR`, so the request only reaches Flask when it isn't a
-navigation. A plain JSON proxy config can't express that logic (no functions allowed),
-which is why this is `proxy.conf.js` and not `proxy.conf.json`.
-
-**User info is persisted from the login/register response, not decoded from the JWT.**
-The token only encodes the user's id (`sub`), not the username. `AuthService` stores
-`access_token` and `user` as two separate `localStorage` keys and exposes them as
-signals (`token`, `user`, computed `isAuthenticated`), restored on page load so a
-refresh doesn't log the user out.
-
-An earlier version had a separate `Client` concept the top bar displayed alongside the
-user. The backend dropped it since it was just static per-tenant display text with no
-real relation to `MotorAsset`/`User`, so the top bar now shows the logged-in user's own
-identity instead.
+A proxy needs zero backend changes. `ng serve --proxy-config proxy.conf.js` forwards `/auth`, `/assets`, and `/health` to `http://127.0.0.1:5000` server-side, so from the browser's point of view every request is same-origin. `127.0.0.1` is used on purpose instead of `localhost`, since `localhost` can resolve to `::1` (IPv6) first depending on the machine, and something else may already be listening on that port over IPv6, silently swallowing every proxied request. A production build would still need a real CORS policy (or a reverse proxy) on the backend; this proxy only covers dev.
 
 **Functional guard and interceptor, not class-based ones.**
-Angular 20's `CanActivateFn` and `HttpInterceptorFn` are the current idiomatic form and
-skip an unnecessary `@Injectable` wrapper class for what's really just a function.
-`authInterceptor` attaches `Authorization: Bearer <token>` when present, and on any
-`401` clears the stored session and redirects to `/login`. That covers "never logged
-in" and "token expired mid-session" the same way.
-
-**IntersectionObserver-driven infinite scroll, not a scroll event listener.**
-A sentinel `<div>` sits after the list. Observing it, rather than computing scroll
-position on every `scroll` event, means no manual throttling and no scroll math.
-
-It's also what triggers the very first page load: the sentinel is visible in an empty
-list on mount, so there's no separate "load page 1" path to keep in sync with "load
-next page." The observer disconnects once `total_pages` is reached.
-
-**Owned-asset ordering is a backend concern, not a client-side sort.**
-The frontend renders whatever order `GET /assets` returns; it doesn't re-sort each
-loaded page by `is_owner` itself. Sorting client-side per page would only group owned
-assets within that page (20 at a time). It can't put every owned asset ahead of every
-non-owned one across the whole paginated, infinite-scrolled list, since the client
-never sees data beyond the current page and only the backend has that view. The
-blue/grey highlight is just a visual reflection of `is_owner`, independent of ordering.
-
-**Password validation is mode-dependent, not one fixed rule.**
-Registering enforces the same complexity rule as the backend, at least 8 characters
-with a lowercase letter, an uppercase letter, a number, and a symbol, via a single
-`Validators.pattern()` on the password control. Login only requires non-empty, since a
-login has to accept whatever password an account was created with, not whatever the
-current registration rule happens to be.
-
-**Hand-rolled SVG line chart, not a charting library.**
-Three single-series time series of about 48 points each didn't justify a dependency
-like Chart.js or ngx-charts. The whole thing is a `computed()` that maps readings to an
-SVG path string.
-
-Each metric gets its own card (small multiples) rather than one combined chart with
-multiple y-axes, since the three metrics have unrelated units and scales. A shared axis
-would either misrepresent the data or need a second y-axis, which is one of the more
-common charting mistakes: it fabricates a correlation between two arbitrarily aligned
-scales. One consistent accent color is used across all three charts rather than a
-distinct hue per metric, since each is already its own titled card and nothing is
-overlaid that a hue would need to disambiguate.
-
-**The Edit button is gated on `is_owner` from the API response, not inferred
-client-side.**
-The frontend has no independent way to know who owns an asset. The JWT only encodes a
-user id, and `owner` is free text with no relation to `User` (see the backend's design
-decisions), so this needed the backend to actually say so.
-
-`GET /assets/:id` didn't originally return `is_owner`, only the list endpoint did,
-which meant the edit form had to be shown to everyone and rely on catching the `PATCH`
-`403` after the fact. That gap was closed by adding `is_owner` to the detail response
-too, mirroring the list endpoint. `startEdit()` in the component re-checks `is_owner`
-before entering edit mode, not just the template hiding the button, so there's no path
-to the form without it. The `403` handling on `save()` stays in place as a backstop for
-things like acting on stale data. It shouldn't normally trigger anymore, but it still
-fails visibly instead of silently if it does.
-
-**Simplified chart hover, not a full crosshair layer.**
-Each data point is a transparent hit circle with a native SVG `<title>` (browser
-tooltip) showing its timestamp and value, rather than a custom crosshair and floating
-tooltip synced across all three charts. That's a real reduction in interactivity
-polish, done on purpose for scope: this is a single lightweight internal page, not a
-monitoring dashboard.
+Angular 20's `CanActivateFn` and `HttpInterceptorFn` are the current idiomatic form and skip an unnecessary `@Injectable` wrapper class for what's really just a function. `authInterceptor` attaches `Authorization: Bearer <token>` when present, and on any `401` clears the stored session and redirects to `/login`. That covers "never logged in" and "token expired mid-session" the same way.
 
 **Jasmine/Karma for unit tests.**
-Angular's own scaffolded Karma/Jasmine setup runs headless Chrome, which works fine
-here, and gives tests that are actually verified passing rather than trusted on faith.
-
-**`IntersectionObserver` is replaced with a hand-written fake in `assets-list.spec.ts`.**
-The real API's firing depends on actual element geometry and visibility, which a
-detached test fixture doesn't reliably reproduce. `FakeIntersectionObserver` is swapped
-onto `window.IntersectionObserver` for the test, captures the callback, and exposes
-`.trigger(isIntersecting)` instead, giving tests direct control over exactly when "the
-sentinel is visible" fires, including edge cases like overlapping triggers while
-loading, or a trigger after `hasMore` goes false, that would be flaky or unreachable
-against a real observer.
-
-**Every component test that renders `<app-top-bar />` needs `provideHttpClient()` and
-`provideRouter([])`, even when the test has nothing to do with auth or routing.**
-`TopBar` injects `AuthService` (which injects `HttpClient`) and `Router`. Omitting
-either provider fails the whole component construction with a DI error, not a graceful
-skip.
-
-Provider order matters too. `provideRouter([])` registers its own `ActivatedRoute`, so
-a test-specific `{ provide: ActivatedRoute, useValue: ... }` has to come after it in the
-providers array, or the router's version wins and the route param the test set never
-shows up. That's the exact ordering bug `asset-detail.spec.ts` hit and fixed.
+Angular's own scaffolded Karma/Jasmine setup runs headless Chrome, which works fine here, and gives tests that are actually verified passing rather than trusted on faith.

@@ -1,21 +1,13 @@
 # Motor Asset Manager
 
 A full-stack app for managing **Motor Assets** — electrical motors fitted with
-high-frequency sensors — on behalf of an industrial client. Backs two conceptual pages:
-an **Asset Overview** (paginated, ownership-aware list) and an **Asset Detail** view
-(full record, limited editing, and per-metric sensor time series charts). Authentication
-is JWT-based, with a superuser (`is_admin`) role able to edit or reassign any asset.
+high-frequency sensors — on behalf of an industrial users. Backs two conceptual pages: an **Asset Overview** (paginated, ownership-aware list) and an **Asset Detail** view (full record, limited editing, and per-metric sensor time series charts). Authentication is JWT-based, with a superuser (`is_admin`) role able to edit or reassign any asset.
 
 - **[backend/](backend/README.md)** — Flask 3 + SQLAlchemy JSON API, Postgres +
   TimescaleDB, Flask-Migrate/Alembic, JWT auth.
-- **[frontend/](frontend/README.md)** — Angular 20, standalone components + signals,
-  no NgModules.
+- **[frontend/](frontend/README.md)** — Angular 20, standalone components + signals, no NgModules.
 
-This document is the system-level view: how the two halves fit together, the data
-model, the authorization model (and the tests that prove it), and how the sensor time
-series is set up today versus how it could evolve. Each subproject's own README goes
-much deeper on its internals and lists every individual design decision — this one
-doesn't repeat those, only points at them.
+This document is the system-level view: how the two halves fit together, the data model, the authorization model (and the tests that prove it), and how the sensor time series is set up today versus how it could evolve. Each subproject's own README goes much deeper on its internals and lists every individual design decision — this one doesn't repeat those, only points at them.
 
 ## Quick start
 
@@ -24,10 +16,8 @@ doesn't repeat those, only points at them.
 ./reset.sh          # wipe local DB + caches back to a blank slate first, if needed
 ```
 
-`ci_cd.sh` runs the backend (`uv sync` → migrate → `pytest` → seed) and frontend
-(`npm install` → Karma → `ng build`) pipelines in order, then starts both dev servers.
-See [backend/README.md](backend/README.md#setup--local-uv) and
-[frontend/README.md](frontend/README.md#setup) for running each half independently.
+`ci_cd.sh` runs the backend (`uv sync` → migrate → `pytest` → seed) and frontend (`npm install` → Karma → `ng build`) pipelines in order, then starts both dev servers.
+See [backend/README.md](backend/README.md#setup--local-uv) and [frontend/README.md](frontend/README.md#setup) for running each half independently.
 
 ## Development timeline
 
@@ -38,7 +28,7 @@ Built in roughly 6.5 hours, in four phases:
 | 1 | Design | 30 min | Frontend/backend needs → Postgres + TimescaleDB choice → folder structure & blueprint packages |
 | 2 | Backend | 2h | Models → APIs → auth, authorization & permissions → Swagger → manual testing → unit testing |
 | 3 | Frontend | 2h | Login page & top bar → listing page & scroll pagination → asset page & edit form → manual testing → unit testing |
-| 4 | Bug fixing & docs | 2h | Bug fixes → feature corrections → README writing |
+| 4 | Bug fixing, cleanup & docs | 3h | Bug fixes → feature corrections → README writing |
 
 ## Architecture
 
@@ -56,15 +46,11 @@ flowchart LR
 
     DB[("PostgreSQL<br/>+ TimescaleDB")]
 
-    FE -- "HTTPS/JSON<br/>Bearer JWT" --> USERBP
-    USERFEBP -- "SQLAlchemy" --> DB
+    FE -- "HTTPS/JSON<br/>Bearer JWT" --> Server
+    Server -- "SQLAlchemy" --> DB
 ```
 
-In dev, the Angular CLI's `proxy.conf.js` forwards `/auth`, `/assets`, and `/health`
-from `localhost:4200` to the Flask app at `127.0.0.1:5000` so the browser only ever
-makes same-origin requests (see [frontend design decisions](frontend/README.md#design-decisions)
-for why it's a `.js` proxy and not a `.json` one, and why `127.0.0.1` and not
-`localhost`).
+In dev, the Angular CLI's `proxy.conf.js` forwards `/auth`, `/assets`, and `/health` from `localhost:4200` to the Flask app at `127.0.0.1:5000` so the browser only ever makes same-origin requests (see [frontend design decisions](frontend/README.md#design-decisions) for why it's a `.js` proxy and not a `.json` one, and why `127.0.0.1` and not `localhost`).
 
 ## Data model
 
@@ -97,19 +83,9 @@ erDiagram
     }
 ```
 
-- **`SensorReading` has no surrogate `id`** — its primary key is the natural
-  `(asset_id, metric, timestamp)` triple, which TimescaleDB requires (the partitioning
-  column must be part of every unique index) and which also happens to be exactly how
-  the data is queried.
-- **`owner_id` is a real foreign key**, not a free-text field — `GET /assets` and
-  `GET /assets/<id>` still expose `owner` as a plain username string in JSON, but
-  ownership checks (`is_owned_by`, the `PATCH` guard, `is_owner`) all resolve through
-  the actual relationship, not string matching.
-- There used to be a third top-level entity, `Client` (one row per industrial client,
-  shown alongside the logged-in user). It was removed — see
-  [backend design decisions](backend/README.md#design-decisions) — because there was
-  only ever one client and every field on it was static display text; `User` is now the
-  only account/identity concept in the system.
+- **`SensorReading` has no surrogate `id`** — its primary key is the natural `(asset_id, metric, timestamp)` triple, which TimescaleDB requires (the partitioning column must be part of every unique index) and which also happens to be exactly how the data is queried.
+- **`owner_id` is a real foreign key**, not a free-text field — `GET /assets`  and `GET /assets/<id>` still expose `owner` as a plain username string in JSON, but ownership checks (`is_owned_by`, the `PATCH` guard, `is_owner`) all resolve through the actual relationship, not string matching.
+- There used to be a third top-level entity, `Client` (one row per industrial client, shown alongside the logged-in user). It was removed — see [backend design decisions](backend/README.md#design-decisions) — because there was only ever one client and every field on it was static display text; `User` is now the only account/identity concept in the system.
 
 ## What each page does
 
@@ -123,8 +99,7 @@ erDiagram
 
 ## Authorization & permissions
 
-Three effective roles, driven by two things: whether the caller is authenticated, and
-whether `User.is_admin` is true.
+Three effective roles, driven by two things: whether the caller is authenticated, and whether `User.is_admin` is true.
 
 | Action | Anonymous | Authenticated, not owner | Authenticated, owner | Admin |
 |---|---|---|---|---|
@@ -159,9 +134,7 @@ short-lived (8h) JWT:
 ### Verified by executable tests, UnitTests
 
 Every rule above has a corresponding backend test in `backend/tests/`
-(`uv run pytest`, 63 tests total) and, where the frontend independently re-implements
-the same gate for UX, a matching frontend test in `frontend/src/app/...spec.ts`
-(`npm test`, 62 tests total):
+(`uv run pytest`, 63 tests total) and, where the frontend independently re-implements the same gate for UX, a matching frontend test in `frontend/src/app/...spec.ts` (`npm test`, 62 tests total):
 
 | Rule | Backend test(s) | Frontend test(s) |
 |---|---|---|
@@ -176,73 +149,22 @@ the same gate for UX, a matching frontend test in `frontend/src/app/...spec.ts`
 | Only admins may reassign `owner`; unknown username is `400`; non-admins get the same rejection as any unsupported field | `test_assets_update.py::test_admin_can_reassign_owner`, `test_admin_can_unset_owner`, `test_admin_reassign_to_unknown_username_is_400`, `test_rejects_unknown_field`, `test_non_admin_non_owner_still_gets_403_even_with_owner_field` | `asset-detail.spec.ts` — save includes/omits `owner` based on `isAdmin()`, sends `null` to unassign |
 | Requests only carry the token when one exists; a `401` logs out + redirects | — | `auth.interceptor.spec.ts` |
 
-`is_admin` itself has no API surface to grant — self-registration always creates a
-non-admin account (`POST /auth/register` never accepts an `is_admin` field), so that
-guarantee is structural rather than something a single test asserts. It can only be set
-by `scripts/seed.py` or a direct database update — see
-[backend design decisions](backend/README.md#design-decisions).
+`is_admin` itself has no API surface to grant — self-registration always creates a non-admin account (`POST /auth/register` never accepts an `is_admin` field), so that guarantee is structural rather than something a single test asserts. It can only be set by `scripts/seed.py` or a direct database update — see [backend design decisions](backend/README.md#design-decisions).
 
 ## Time series data: current state and future direction
 
-**Today**, sensor readings are synthetic: `backend/scripts/seed.py` generates ~48
-hourly Faker-randomized readings per metric per asset and inserts them directly into
-the `sensor_readings` hypertable. There is no live device, no message queue, and no
-background worker in this repo — `GET /assets/<id>` just reads whatever rows already
-exist in Postgres.
+**Today**, sensor readings are synthetic: `backend/scripts/seed.py` generates ~48 hourly Faker-randomized readings per metric per asset and inserts them directly into the `sensor_readings` hypertable. There is no live device, no message queue, and no background worker in this repo — `GET /assets/<id>` just reads whatever rows already exist in Postgres. That's a reasonable stand-in for the assignment scope, but a real deployment would need an actual ingestion path from the motors' sensors into this table (or, as explored below, no table at all). Three shapes that path could take, roughly in order of "this service owns the data" to "this service borrows it":
 
-That's a reasonable stand-in for a take-home/demo scope, but a real deployment would
-need an actual ingestion path from the motors' sensors into this table (or, as explored
-below, no table at all). Three shapes that path could take, roughly in order of "this
-service owns the data" to "this service borrows it":
+* **A — Kafka streaming ingestion.** Sensors push events to topics; consumers write directly to `sensor_readings`. Decouples ingestion from write throughput with native replay and backpressure, but introduces Kafka operational overhead.
+* **B — Celery beat scheduled polling.** A periodic task polls external APIs on an interval and upserts new records. Avoids extra streaming infrastructure, but bounds ingestion latency and requires a custom scaling strategy for asset fan-out and rate limits.
+* **C — Zero-duplication live query.** The API queries an external fleet-wide TimescaleDB/InfluxDB cluster live at request time (`GET /assets/<id>`). Eliminates data duplication and synchronization issues, but tightly couples endpoint latency and availability to the external store.
 
-```mermaid
-flowchart TB
-    DEV["Motor / sensor gateway"]
+None of A/B/C is implemented here — this section is a design discussion for "what would need to change for this to be real," not a description of existing code.
 
-    DEV -- "A: publishes events" --> KAFKA["Kafka topic<br/>(per asset or per metric)"]
-    KAFKA --> CONSUMER["Consumer<br/>(Celery worker or dedicated service)"]
-    CONSUMER --> PG[("sensor_readings<br/>Postgres/TimescaleDB")]
-
-    DEV -- "B: exposes a poll API" --> BEAT["Celery beat<br/>periodic task"]
-    BEAT --> PG
-
-    EXT[("External TSDB<br/>already holds the readings")]
-    API["Flask GET /assets/&lt;id&gt;"] -. "C: federated read at<br/>request time, no copy stored" .-> EXT
-```
-
-- **A — Kafka streaming ingestion.** Sensors/gateways publish onto a topic (per-asset
-  or per-metric); a consumer — a small dedicated service, or a Celery worker acting as
-  the consumer loop — writes each message into `sensor_readings`. Decouples ingestion
-  rate from write throughput and gives replay/backpressure for free, at the cost of
-  operating Kafka (or a managed equivalent) plus the consumer itself.
-- **B — Celery beat scheduled polling.** A periodic task polls an external
-  device/gateway API on an interval and upserts whatever's new. No streaming
-  infrastructure to run, but ingestion latency is bounded by the poll interval, and
-  polling many assets means the task itself needs a scaling story (fan-out per asset,
-  rate limits against the gateway, etc.).
-- **C — Don't duplicate the data at all.** If the raw time series already lives in an
-  external, purpose-built store — a fleet-wide TimescaleDB/InfluxDB cluster owned by
-  another system, say — this API arguably shouldn't keep its own copy just to re-serve
-  it. `GET /assets/<id>` could query that store live at request time and shape the
-  result into the same `sensor_metrics` response, skipping A/B and the
-  storage-duplication/consistency problem they both create. The trade is a runtime
-  dependency: this endpoint's latency and availability become coupled to that external
-  store's, whereas A/B keep reads local once ingested.
-
-None of A/B/C is implemented here — this section is a design discussion for "what
-would need to change for this to be real," not a description of existing code.
 
 ### Frontend: live-updating charts (future work)
 
-The sensor charts currently load once, when the Asset Detail page mounts
-(`GET /assets/<id>` on page load) — there's no live refresh. A natural next step is
-having the page re-fetch on an interval (RxJS `interval()`/`timer()`, or
-Angular's `resource()`) so the chart reflects new readings without a manual reload,
-useful once any of A/B above is actually landing new rows. That's additional future
-work, not implemented today: it would need to reconcile in-flight requests, probably
-pause polling when the tab isn't visible, and decide whether to keep re-fetching the
-full detail payload or add a lighter "latest readings since timestamp" endpoint instead
-of repeatedly pulling all ~48 points per metric.
+The sensor charts currently load once, when the Asset Detail page mounts (`GET /assets/<id>` on page load) — there's no live refresh. A natural next step is having the page re-fetch on an interval (RxJS `interval()`/`timer()`, or Angular's `resource()`) so the chart reflects new readings without a manual reload, useful once any of A/B above is actually landing new rows. That's additional future work, not implemented today: it would need to reconcile in-flight requests, probably pause polling when the tab isn't visible, and decide whether to keep re-fetching the full detail payload or add a lighter "latest readings since timestamp" endpoint instead of repeatedly pulling all ~48 points per metric.
 
 ## Testing
 
@@ -251,15 +173,11 @@ cd backend && uv run pytest                                    # 63 tests
 cd frontend && npm test -- --watch=false --browsers=ChromeHeadless  # 62 tests
 ```
 
-See [backend/README.md#automated-tests](backend/README.md#automated-tests) and
-[frontend/README.md#automated-tests](frontend/README.md#automated-tests) for the full
-per-file breakdown — the table above only pulls out the auth/permission-relevant ones.
+See [backend/README.md#automated-tests](backend/README.md#automated-tests) and [frontend/README.md#automated-tests](frontend/README.md#automated-tests) for the full per-file breakdown — the table above only pulls out the auth permission-relevant ones.
 
 ## Design decisions
 
-Every non-obvious choice — why blueprints are split the way they are, why Alembic
-instead of `db.create_all()`, why the dev proxy is a `.js` file, why the SVG chart is
-hand-rolled, why `Client` was removed, and many more — is written up where it was made:
+Every non-obvious choice — why blueprints are split the way they are, why Alembic instead of `db.create_all()`, why the dev proxy is a `.js` file, why the SVG chart is hand-rolled, why `Client` was removed, and many more — is written up where it was made:
 
 - **[backend/README.md#design-decisions](backend/README.md#design-decisions)**
 - **[frontend/README.md#design-decisions](frontend/README.md#design-decisions)**
