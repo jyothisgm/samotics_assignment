@@ -10,6 +10,7 @@ assets_bp = Blueprint("assets", __name__, url_prefix="/assets")
 
 UPDATABLE_ASSET_FIELDS = {"name", "description", "location"}
 ADMIN_ONLY_FIELDS = {"owner"}
+MAX_FIELD_LENGTHS = {"name": 200, "description": 1000, "location": 200}
 
 
 @assets_bp.get("")
@@ -123,7 +124,8 @@ def update_asset(asset_id):
       200:
         description: Updated asset detail.
       400:
-        description: Unsupported field in body, empty name, or unknown owner username.
+        description: Unsupported field in body, empty name, a field over its max
+          length, or unknown owner username.
       401:
         description: Missing or invalid bearer token.
       403:
@@ -149,6 +151,11 @@ def update_asset(asset_id):
 
     if "name" in data and not data["name"]:
         abort(400, description="'name' cannot be empty")
+
+    for field, max_length in MAX_FIELD_LENGTHS.items():
+        value = data.get(field)
+        if value and len(value) > max_length:
+            abort(400, description=f"'{field}' must be at most {max_length} characters")
 
     if "owner" in data:
         new_owner_username = data["owner"]

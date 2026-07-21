@@ -23,8 +23,8 @@ METRICS = [
 READINGS_PER_METRIC = 48  # hourly for 2 days
 
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "password")
-OWNER_PASSWORD = os.environ.get("OWNER_PASSWORD", "password")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Admin123@")
+OWNER_PASSWORD = os.environ.get("OWNER_PASSWORD", "Password123@")
 
 fake = Faker()
 

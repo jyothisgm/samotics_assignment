@@ -6,6 +6,10 @@ import { AuthService } from '../../core/auth/auth.service';
 
 type Mode = 'login' | 'register';
 
+// Mirrors the backend's rule: at least 8 characters, a lowercase letter, an
+// uppercase letter, a number, and a symbol.
+const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+
 @Component({
   selector: 'app-login',
   imports: [ReactiveFormsModule],
@@ -27,11 +31,11 @@ export class Login {
   });
 
   constructor() {
-    // Registering enforces the backend's 6-character minimum; logging in must not,
-    // since the seeded admin/admin credentials are only 5 characters.
+    // Registering enforces the backend's password complexity rule; logging in must
+    // not, since login has to accept whatever password an account already has.
     effect(() => {
-      const minLength = this.mode() === 'register' ? [Validators.minLength(6)] : [];
-      this.form.controls.password.setValidators([Validators.required, ...minLength]);
+      const complexity = this.mode() === 'register' ? [Validators.pattern(PASSWORD_PATTERN)] : [];
+      this.form.controls.password.setValidators([Validators.required, ...complexity]);
       this.form.controls.password.updateValueAndValidity();
     });
   }

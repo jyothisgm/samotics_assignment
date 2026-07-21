@@ -33,26 +33,12 @@ See [backend/README.md](backend/README.md#setup--local-uv) and
 
 Built in roughly 6.5 hours, in four phases:
 
-```mermaid
-timeline
-    title Development timeline (~6.5 hours)
-    Design (30 min) : Frontend/backend needs : Postgres + TimescaleDB choice : Folder structure & blueprint packages
-    Backend (2h) : Models : APIs : Auth, authorization & permissions : Swagger : Manual testing : Unit testing
-    Frontend (2h) : Login page & top bar : Listing page & scroll pagination : Asset page & edit form : Manual testing : Unit testing
-    Bug fixing & docs (2h) : Bug fixes : Feature corrections : README writing
-```
-
-- **Design (30 min)** — scoped what the frontend and backend each needed, picked
-  Postgres + TimescaleDB for the time series data, and settled the folder structure
-  (blueprint packages per concern rather than one flat `app.py`).
-- **Backend (2h)** — models first, then the CRUD/list/detail APIs, then auth +
-  authorization/permissions (owner vs. admin), then Swagger docs, then manual
-  smoke-testing, then the `pytest` suite.
-- **Frontend (2h)** — login page + top bar, then the asset listing page with
-  infinite scroll, then the asset detail page + edit form, then manual testing in
-  the browser, then the Jasmine/Karma suite.
-- **Bug fixing, feature corrections & README (2h)** — the admin/superuser role,
-  the JSON error-handling fix, and both this document and the per-project READMEs.
+| Order | Phase | Duration | Steps |
+|---|---|---|---|
+| 1 | Design | 30 min | Frontend/backend needs → Postgres + TimescaleDB choice → folder structure & blueprint packages |
+| 2 | Backend | 2h | Models → APIs → auth, authorization & permissions → Swagger → manual testing → unit testing |
+| 3 | Frontend | 2h | Login page & top bar → listing page & scroll pagination → asset page & edit form → manual testing → unit testing |
+| 4 | Bug fixing & docs | 2h | Bug fixes → feature corrections → README writing |
 
 ## Architecture
 
@@ -71,9 +57,7 @@ flowchart LR
     DB[("PostgreSQL<br/>+ TimescaleDB")]
 
     FE -- "HTTPS/JSON<br/>Bearer JWT" --> USERBP
-    FE -- "HTTPS/JSON<br/>Bearer JWT" --> ASSETBP
-    USERBP -- "SQLAlchemy" --> DB
-    ASSETBP -- "SQLAlchemy" --> DB
+    USERFEBP -- "SQLAlchemy" --> DB
 ```
 
 In dev, the Angular CLI's `proxy.conf.js` forwards `/auth`, `/assets`, and `/health`
@@ -171,30 +155,11 @@ flowchart TD
 Login itself is a straightforward credential check — no session, just a signed,
 short-lived (8h) JWT:
 
-```mermaid
-sequenceDiagram
-    participant U as Browser
-    participant FE as Angular AuthService
-    participant BE as Flask /auth/login
-    participant DB as Postgres (users)
 
-    U->>FE: submit username + password
-    FE->>BE: POST /auth/login
-    BE->>DB: SELECT * FROM users WHERE username = ?
-    DB-->>BE: User row (password_hash, is_admin)
-    BE->>BE: check_password() — Werkzeug scrypt-backed hash
-    alt valid credentials
-        BE-->>FE: 200 {access_token, user: {id, username, is_admin}}
-        FE->>FE: persist to localStorage, set signals
-    else invalid
-        BE-->>FE: 401 {error: "Invalid username or password"}
-    end
-```
-
-### This is verified by executable tests, not just described here
+### Verified by executable tests, UnitTests
 
 Every rule above has a corresponding backend test in `backend/tests/`
-(`uv run pytest`, 55 tests total) and, where the frontend independently re-implements
+(`uv run pytest`, 63 tests total) and, where the frontend independently re-implements
 the same gate for UX, a matching frontend test in `frontend/src/app/...spec.ts`
 (`npm test`, 62 tests total):
 
@@ -203,6 +168,7 @@ the same gate for UX, a matching frontend test in `frontend/src/app/...spec.ts`
 | Every `/assets` route needs a valid token | `test_assets_list.py::test_requires_auth`, `test_assets_detail.py::test_requires_auth`, `test_assets_update.py::test_requires_auth` | `auth.guard.spec.ts` — *"redirects to /login when the user is not authenticated"* |
 | Login only succeeds on matching credentials | `test_auth.py::TestLogin` (`test_login_with_correct_credentials`, `test_login_wrong_password`, `test_login_unknown_username`, `test_login_missing_fields`) | `auth.service.spec.ts` — login/logout persistence tests |
 | Passwords are hashed, never compared in plaintext | `test_auth.py::TestRegister::test_registered_password_is_hashed_not_stored_plain`, `test_models.py::TestUserPassword` (all 3) | — |
+| Registered passwords must be 8+ characters with a lowercase letter, an uppercase letter, a number, and a symbol; login has no such rule | `test_auth.py::TestRegister` (`test_register_password_too_short`, `test_register_password_missing_lowercase`, `test_register_password_missing_uppercase`, `test_register_password_missing_number`, `test_register_password_missing_symbol`) | `login.spec.ts` — *"requires a complex password in register mode"* / *"does not require a complex password in login mode"* |
 | `is_owner` reflects the *requesting* user, not a fixed value | `test_models.py::TestIsOwnedBy` (all 4), `test_assets_list.py::test_is_owner_reflects_current_user`, `test_assets_detail.py::test_is_owner_true_for_owner` / `test_is_owner_false_for_non_owner` | `asset-detail.spec.ts` → *"ownership gating"* describe block |
 | List summaries never leak `description`/`owner` | `test_models.py::TestToSummaryDict::test_does_not_leak_description_or_owner` | — |
 | Only the owner can `PATCH`; a rejected write never partially applies | `test_assets_update.py::test_owner_can_update_name_description_location`, `test_non_owner_gets_403`, `test_403_does_not_apply_the_change`, `test_asset_with_no_owner_cannot_be_updated_by_anyone` | `asset-detail.spec.ts` — `startEdit()` re-checks, doesn't just hide the button |
@@ -281,7 +247,7 @@ of repeatedly pulling all ~48 points per metric.
 ## Testing
 
 ```bash
-cd backend && uv run pytest                                    # 55 tests
+cd backend && uv run pytest                                    # 63 tests
 cd frontend && npm test -- --watch=false --browsers=ChromeHeadless  # 62 tests
 ```
 

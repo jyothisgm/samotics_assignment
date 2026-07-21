@@ -1,8 +1,7 @@
 # frontend
 
 Angular 20 client for the Motor Asset Manager API ([backend/](../backend)). Standalone
-components, signals, and the new `@if`/`@for` control-flow syntax throughout — no
-NgModules.
+components, signals, and the new `@if`/`@for` control-flow syntax throughout.
 
 ## Setup
 
@@ -25,8 +24,8 @@ NgModules.
    cross-origin request (see [Design decisions](#design-decisions)). Open
    `http://localhost:4200`.
 
-4. Log in with a seeded account (`admin`, `samotics`, or `jyothis`, all password
-   `password`), or use the **Register** tab to create a new one.
+4. Log in with a seeded account (`Admin123@`, `samotics`, or `jyothis`, all password
+   `Password123@`), or use the **Register** tab to create a new one.
 
 ## What's here so far
 
@@ -79,7 +78,7 @@ proxy.conf.js           Dev-server proxy to the Flask backend (JS, not JSON — 
 npm test -- --watch=false --browsers=ChromeHeadless
 ```
 
-56 Jasmine specs run via Karma (Angular's default), covering:
+62 Jasmine specs run via Karma (Angular's default), covering:
 
 - `auth.service.spec.ts` — login/register persist token + user to `localStorage` and
   update signals; logout clears everything; state restores correctly from
@@ -108,111 +107,123 @@ npm test -- --watch=false --browsers=ChromeHeadless
 
 ## Design decisions
 
-**Dev-server proxy instead of CORS on the backend.** The backend is intentionally
-paused for this frontend work, and a proxy needs zero backend changes: `ng serve
---proxy-config proxy.conf.js` forwards `/auth`, `/assets`, and `/health` to
-`http://127.0.0.1:5000` server-side, so from the browser's point of view every request
-is same-origin. `127.0.0.1` is used explicitly rather than `localhost` — on this machine
-`localhost` resolves to `::1` first, which macOS's AirPlay Receiver was squatting on for
-port 5000, silently swallowing every proxied request. A production build would need a
-real CORS policy (or a reverse proxy) on the backend instead; this only covers dev.
+**Dev-server proxy instead of CORS on the backend.**
+A proxy needs zero backend changes. `ng serve --proxy-config proxy.conf.js` forwards
+`/auth`, `/assets`, and `/health` to `http://127.0.0.1:5000` server-side, so from the
+browser's point of view every request is same-origin.
 
-**The proxy is a `.js` file with a `bypass`, not a plain `.json` path map.** The Angular
-client route `/assets/:id` and the backend API path `/assets/:id` are the same URL —
-Angular's `HttpClient` needs it proxied to Flask, but a real browser navigation to that
-URL (typing it, refreshing, opening it in a new tab) needs the SPA shell (`index.html`)
-instead, or the app never boots and there's no router left to redirect anywhere. `bypass`
-checks `Sec-Fetch-Mode` — browsers set it to `navigate` on real page loads and something
-else on `fetch`/`XHR` — and only lets the request through to Flask when it isn't a
-navigation. A plain JSON proxy config can't express this (no functions allowed), which
-is why it's `proxy.conf.js`.
+`127.0.0.1` is used on purpose instead of `localhost`. On this machine `localhost`
+resolves to `::1` first, and macOS's AirPlay Receiver was squatting on that port,
+silently swallowing every proxied request. A production build would still need a real
+CORS policy (or a reverse proxy) on the backend; this proxy only covers dev.
 
-**User info persisted from the login/register response, not decoded from the JWT.**
+**The proxy is a `.js` file with a bypass, not a plain `.json` path map.**
+The Angular route `/assets/:id` and the backend API path `/assets/:id` are the same
+URL. `HttpClient` needs that URL proxied to Flask, but a real browser navigation to it
+(typing it in, refreshing, opening a new tab) needs the SPA shell (`index.html`)
+instead, or the app never boots and there's no router left to redirect anywhere.
+
+`bypass` checks `Sec-Fetch-Mode`. Browsers set it to `navigate` on real page loads and
+something else on `fetch`/`XHR`, so the request only reaches Flask when it isn't a
+navigation. A plain JSON proxy config can't express that logic (no functions allowed),
+which is why this is `proxy.conf.js` and not `proxy.conf.json`.
+
+**User info is persisted from the login/register response, not decoded from the JWT.**
 The token only encodes the user's id (`sub`), not the username. `AuthService` stores
-`access_token` and `user` from the response body as two separate `localStorage` keys
-and exposes them as signals (`token`, `user`, computed `isAuthenticated`), restored on
-page load so a refresh doesn't log the user out. (Earlier this was a separate `Client`
-concept the top bar displayed alongside the user; the backend dropped it since it was
-just static per-tenant display text with no real relation to `MotorAsset`/`User` — the
-top bar now shows the logged-in user's own identity instead.)
+`access_token` and `user` as two separate `localStorage` keys and exposes them as
+signals (`token`, `user`, computed `isAuthenticated`), restored on page load so a
+refresh doesn't log the user out.
 
-**Functional guard + interceptor, not class-based ones.** Angular 20's `CanActivateFn`/
-`HttpInterceptorFn` are the current idiomatic form and avoid an unnecessary
-`@Injectable` wrapper class for what's each a single function. `authInterceptor`
-attaches `Authorization: Bearer <token>` when present and, on any `401` response, clears
-the stored session and redirects to `/login` — covers both "never logged in" and "token
-expired mid-session" the same way.
+An earlier version had a separate `Client` concept the top bar displayed alongside the
+user. The backend dropped it since it was just static per-tenant display text with no
+real relation to `MotorAsset`/`User`, so the top bar now shows the logged-in user's own
+identity instead.
 
-**IntersectionObserver-driven infinite scroll, not a scroll event listener.** A sentinel
-`<div>` sits after the list; observing it (rather than computing scroll position on
-every `scroll` event) means no manual throttling/debouncing and no scroll-math. It's
-also what triggers the very first page load — the sentinel is visible in an empty list
-on mount, so there's no separate "load page 1" code path to keep in sync with "load next
-page." The observer disconnects once `total_pages` is reached.
+**Functional guard and interceptor, not class-based ones.**
+Angular 20's `CanActivateFn` and `HttpInterceptorFn` are the current idiomatic form and
+skip an unnecessary `@Injectable` wrapper class for what's really just a function.
+`authInterceptor` attaches `Authorization: Bearer <token>` when present, and on any
+`401` clears the stored session and redirects to `/login`. That covers "never logged
+in" and "token expired mid-session" the same way.
 
-**Owned-asset ordering is a backend concern, not a client-side sort.** The frontend
-just renders whatever order `GET /assets` returns — it doesn't re-sort each loaded
-page by `is_owner` itself. Sorting client-side per page would only group owned assets
-*within* a page (20 at a time); it can't put every owned asset before every non-owned
-one across the whole paginated/infinite-scrolled list without knowledge of data beyond
-the current page, which only the backend has. The blue/grey highlight is purely a
-visual reflection of `is_owner`, independent of that ordering.
+**IntersectionObserver-driven infinite scroll, not a scroll event listener.**
+A sentinel `<div>` sits after the list. Observing it, rather than computing scroll
+position on every `scroll` event, means no manual throttling and no scroll math.
 
-**Password validation is mode-dependent, not a single fixed rule.** Registering enforces
-a 6-character minimum in the UI (matching the backend), but login only requires
-non-empty — the seeded `admin`/`admin` credentials are 5 characters, so a blanket
-`minLength(6)` on the form would make the documented demo login impossible to submit.
+It's also what triggers the very first page load: the sentinel is visible in an empty
+list on mount, so there's no separate "load page 1" path to keep in sync with "load
+next page." The observer disconnects once `total_pages` is reached.
 
-**Hand-rolled SVG line chart, not a charting library.** Three single-series time series
-of ~48 points each didn't justify a dependency (Chart.js/ngx-charts/etc.) — the whole
-thing is a `computed()` that maps readings to an SVG path string. Each metric is its own
-card (small multiples) rather than one combined chart with multiple y-axes, since the
-three metrics have unrelated units/scales — a shared axis would either misrepresent the
-data or need a second y-axis, which is the #1 charting anti-pattern (a fabricated
-correlation between arbitrarily-aligned scales). One consistent accent color is used
-across all three charts rather than a distinct hue per metric: each is already a
-separate card with its own title, so color isn't doing any identity work here — nothing
-is overlaid for a hue to disambiguate.
+**Owned-asset ordering is a backend concern, not a client-side sort.**
+The frontend renders whatever order `GET /assets` returns; it doesn't re-sort each
+loaded page by `is_owner` itself. Sorting client-side per page would only group owned
+assets within that page (20 at a time). It can't put every owned asset ahead of every
+non-owned one across the whole paginated, infinite-scrolled list, since the client
+never sees data beyond the current page and only the backend has that view. The
+blue/grey highlight is just a visual reflection of `is_owner`, independent of ordering.
+
+**Password validation is mode-dependent, not one fixed rule.**
+Registering enforces the same complexity rule as the backend, at least 8 characters
+with a lowercase letter, an uppercase letter, a number, and a symbol, via a single
+`Validators.pattern()` on the password control. Login only requires non-empty, since a
+login has to accept whatever password an account was created with, not whatever the
+current registration rule happens to be.
+
+**Hand-rolled SVG line chart, not a charting library.**
+Three single-series time series of about 48 points each didn't justify a dependency
+like Chart.js or ngx-charts. The whole thing is a `computed()` that maps readings to an
+SVG path string.
+
+Each metric gets its own card (small multiples) rather than one combined chart with
+multiple y-axes, since the three metrics have unrelated units and scales. A shared axis
+would either misrepresent the data or need a second y-axis, which is one of the more
+common charting mistakes: it fabricates a correlation between two arbitrarily aligned
+scales. One consistent accent color is used across all three charts rather than a
+distinct hue per metric, since each is already its own titled card and nothing is
+overlaid that a hue would need to disambiguate.
 
 **The Edit button is gated on `is_owner` from the API response, not inferred
-client-side.** The frontend has no independent way to know who owns an asset — the JWT
-only encodes a user id, and `owner` is free text with no relation to `User` (see the
-backend's design decisions) — so this needed the backend to actually say so. Initially
-`GET /assets/:id` didn't return `is_owner` (only the list endpoint did), which meant the
-edit form had to be shown to everyone and rely on catching the `PATCH` `403` after the
-fact; that gap was closed by adding `is_owner` to the detail response too, mirroring the
-list endpoint exactly. `startEdit()` in the component re-checks `is_owner` before
-entering edit mode, not just the template hiding the button, so there's no path to the
-form without it. The `403` handling on `save()` stays in place as defense-in-depth (e.g.
-acting on stale data) — a `403` there is now something that should never normally
-happen rather than the primary guard, but it still fails visibly instead of silently if
-it does.
+client-side.**
+The frontend has no independent way to know who owns an asset. The JWT only encodes a
+user id, and `owner` is free text with no relation to `User` (see the backend's design
+decisions), so this needed the backend to actually say so.
 
-**Simplified chart hover, not a full crosshair layer.** Each data point is a transparent
-hit circle with a native SVG `<title>` (browser tooltip) showing its timestamp and
-value, rather than a custom synced crosshair + floating tooltip across all three charts.
-That's a real reduction in interactivity polish, done deliberately for scope — this is a
-single lightweight internal page, not a monitoring dashboard.
+`GET /assets/:id` didn't originally return `is_owner`, only the list endpoint did,
+which meant the edit form had to be shown to everyone and rely on catching the `PATCH`
+`403` after the fact. That gap was closed by adding `is_owner` to the detail response
+too, mirroring the list endpoint. `startEdit()` in the component re-checks `is_owner`
+before entering edit mode, not just the template hiding the button, so there's no path
+to the form without it. The `403` handling on `save()` stays in place as a backstop for
+things like acting on stale data. It shouldn't normally trigger anymore, but it still
+fails visibly instead of silently if it does.
 
-**Jasmine/Karma for unit tests.** 
-Angular's own scaffolded Karma/Jasmine setup runs headless Chrome, which does work
-there, and gives tests that are actually verified passing rather than trusted on faith.
+**Simplified chart hover, not a full crosshair layer.**
+Each data point is a transparent hit circle with a native SVG `<title>` (browser
+tooltip) showing its timestamp and value, rather than a custom crosshair and floating
+tooltip synced across all three charts. That's a real reduction in interactivity
+polish, done on purpose for scope: this is a single lightweight internal page, not a
+monitoring dashboard.
 
-**`IntersectionObserver` is replaced with a hand-written fake in `assets-list.spec.ts`**
-(`FakeIntersectionObserver`, swapped onto `window.IntersectionObserver` for the test),
-not exercised via real browser layout. The real API's firing depends on actual element
-geometry and visibility, which a detached test fixture doesn't reliably reproduce —
-the fake instead captures the callback and exposes `.trigger(isIntersecting)`, giving
-tests direct, deterministic control over exactly when a "the sentinel is visible" event
-fires, including edge cases (overlapping triggers while loading, triggers after
-`hasMore` goes false) that would be flaky or unreachable driving a real observer.
+**Jasmine/Karma for unit tests.**
+Angular's own scaffolded Karma/Jasmine setup runs headless Chrome, which works fine
+here, and gives tests that are actually verified passing rather than trusted on faith.
 
-**Every component test that renders `<app-top-bar />` needs `provideHttpClient()` +
+**`IntersectionObserver` is replaced with a hand-written fake in `assets-list.spec.ts`.**
+The real API's firing depends on actual element geometry and visibility, which a
+detached test fixture doesn't reliably reproduce. `FakeIntersectionObserver` is swapped
+onto `window.IntersectionObserver` for the test, captures the callback, and exposes
+`.trigger(isIntersecting)` instead, giving tests direct control over exactly when "the
+sentinel is visible" fires, including edge cases like overlapping triggers while
+loading, or a trigger after `hasMore` goes false, that would be flaky or unreachable
+against a real observer.
+
+**Every component test that renders `<app-top-bar />` needs `provideHttpClient()` and
 `provideRouter([])`, even when the test has nothing to do with auth or routing.**
-`TopBar` injects `AuthService` (which injects `HttpClient`) and `Router`; omitting
-either provider fails the whole component construction with a DI error, not a
-graceful skip. Provider *order* matters too: `provideRouter([])` registers its own
-`ActivatedRoute`, so a test-specific `{ provide: ActivatedRoute, useValue: ... }` must
-be listed *after* it in the providers array, or the router's version wins and the
-route param the test set never appears — this exact ordering bug is what
-`asset-detail.spec.ts` hit and fixed.
+`TopBar` injects `AuthService` (which injects `HttpClient`) and `Router`. Omitting
+either provider fails the whole component construction with a DI error, not a graceful
+skip.
+
+Provider order matters too. `provideRouter([])` registers its own `ActivatedRoute`, so
+a test-specific `{ provide: ActivatedRoute, useValue: ... }` has to come after it in the
+providers array, or the router's version wins and the route param the test set never
+shows up. That's the exact ordering bug `asset-detail.spec.ts` hit and fixed.

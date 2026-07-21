@@ -31,7 +31,10 @@
       </label>
 
       @if (mode() === 'register') {
-        <p class="hint">Must be at least 6 characters.</p>
+        <p class="hint">
+          Must be at least 8 characters, with an uppercase letter, a lowercase letter,
+          a number, and a symbol.
+        </p>
       }
 
       @if (error()) {

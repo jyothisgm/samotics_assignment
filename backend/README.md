@@ -115,11 +115,12 @@ Useful for iterating on the app without rebuilding a container each time.
    uv run python scripts/seed.py
    ```
 
-   Seeds exactly three accounts, all password `password`: `admin` (override via
+   Seeds exactly three accounts: `Admin123@` (password `Password123@`, override via
    `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars, seeded with `is_admin=True`), and two
-   fixed asset owners — `samotics` and `jyothis` — that the 200 assets are randomly
-   split across. Log in as either owner to see `is_owner` and asset editing work for
-   real, or as `admin` to edit/reassign any asset regardless of ownership.
+   fixed asset owners — `samotics` and `jyothis` — both password `Password123@`
+   (override via `OWNER_PASSWORD`), that the 200 assets are randomly split across. Log
+   in as either owner to see `is_owner` and asset editing work for real, or as the
+   admin account to edit/reassign any asset regardless of ownership.
 
 6. Run the app:
 
@@ -148,12 +149,15 @@ uv run flask --app run db upgrade
 Liveness check, unauthenticated. `{"status": "ok"}`.
 
 ### `POST /auth/register`
-Unauthenticated. Body: `{"username": "...", "password": "..."}` (password ≥ 6 chars).
-Creates a `User` and returns
+Unauthenticated. Body: `{"username": "...", "password": "..."}`. `username` must be
+80 characters or fewer; `password` must be at least 8 characters and include a
+lowercase letter, an uppercase letter, a number, and a symbol. Creates a `User` and
+returns
 `{"access_token": "...", "user": {"id": 1, "username": "...", "is_admin": false}}` with
-`201`. `400` if username/password are missing or the password is too short, `409` if
-the username is already taken. Self-registered accounts are never admins — `is_admin`
-can only be set by seeding or a direct DB update, there's no API surface for granting it.
+`201`. `400` if username/password are missing, the username is too long, or the
+password fails any of the complexity rules; `409` if the username is already taken.
+Self-registered accounts are never admins — `is_admin` can only be set by seeding or a
+direct DB update, there's no API surface for granting it.
 
 ### `POST /auth/login`
 Unauthenticated. Body: `{"username": "...", "password": "..."}`. Returns
@@ -192,7 +196,9 @@ charting library. 404s if the asset doesn't exist.
 ### `PATCH /assets/<id>`
 Updates `name`, `description`, and/or `location` — the fields the spec calls out as
 editable. Any other field in the body is rejected with `400` rather than silently
-ignored, and an empty `name` is rejected. Restricted to the asset's owner: `403` if the
+ignored, an empty `name` is rejected, and each field is capped at its column's max
+length (`name`/`location` 200 characters, `description` 1000) with `400` if exceeded.
+Restricted to the asset's owner: `403` if the
 logged-in user's username doesn't match the asset's `owner` field (see `is_owner`
 above — same check, enforced here) *and* the logged-in user isn't an admin. Returns the
 full updated asset (same shape as `GET /assets/<id>`).
@@ -299,7 +305,7 @@ username-matching this started as. `is_owner` (used by both `GET /assets` and `G
 /assets/<id>`, plus the `PATCH` guard below) now lives as `MotorAsset.is_owned_by()`
 on the model — `self.owner is not None and self.owner.username == current_username` —
 rather than a string comparison against free text. Seeded owner logins (`samotics`,
-`jyothis`, password `password` — see Setup) are real accounts, so ownership can
+`jyothis`, password `Password123@` — see Setup) are real accounts, so ownership can
 actually be tested by logging in as a real owner rather than needing to separately
 register an account with a matching name. `owner_id` stays nullable: an asset without
 an assigned owner is a valid state (nobody can edit it, which is the correct default,
@@ -323,12 +329,23 @@ helpers (`current_user()` returning the full `User`, `current_username()` wrappi
 instead of one, so each call site fetches only what it needs.
 
 **Self-registration is open — anyone with a username/password can create an account.**
-There's no invite flow, admin approval, or role system in the spec, so `POST
-/auth/register` doesn't gate account creation beyond "username not already taken" and a
-minimum password length. `seed.py` still seeds one `admin` user (credentials
-overridable via `ADMIN_USERNAME`/`ADMIN_PASSWORD`) so there's always a known account to
-log in with, but it's no longer the only way to get one. All users are equivalent
-today — there's no role system yet to distinguish them.
+There's no invite flow or admin approval in the spec, so `POST /auth/register` doesn't
+gate account creation beyond "username not already taken," a username length cap, and
+the password rule below. `seed.py` still seeds one admin user (credentials overridable
+via `ADMIN_USERNAME`/`ADMIN_PASSWORD`) so there's always a known account to log in
+with, but it's no longer the only way to get one. Every self-registered account starts
+as a regular (non-admin) user — there's no field in the request body that could set
+`is_admin`.
+
+**Password complexity is enforced once, in `validate_password()` (`app/user/auth.py`),
+not scattered across the route.** `POST /auth/register` requires at least 8 characters
+with a lowercase letter, an uppercase letter, a number, and a symbol, returning the
+first rule that failed rather than a generic rejection — a user finds out *why* their
+password was rejected in one round trip instead of guessing. It only applies at
+registration; `User.set_password()` itself has no opinion on password strength, since
+`seed.py` and test fixtures need to set arbitrary passwords without going through the
+API. `POST /auth/login` doesn't enforce it either — a login has to accept whatever
+password an account already has, not whatever the current rule happens to require.
 
 **Alembic (via Flask-Migrate) instead of `db.create_all()`.** Once there's a login flow
 and real accumulated data (users, historical sensor readings), blowing away and
@@ -368,8 +385,10 @@ predictable accounts so the demo credentials are always the same across reseeds 
 than changing every run. Assigning each of the 200 assets to one of only two owners
 means each ends up with roughly half — enough to exercise `is_owner` being `true`
 across *many* rows in the list for the same logged-in user, not just a single asset.
-All three seeded accounts (`admin` plus the two owners) share the password `password`
-since they're fixture data, not real accounts someone chose a password for.
+All three seeded accounts (the admin plus the two owners) share the password
+`Password123@` since they're fixture data, not real accounts someone chose a password
+for — it still has to satisfy the same complexity rule as any other account, seeding
+bypasses `POST /auth/register` but not what a real password looks like.
 
 **Pagination via `Flask-SQLAlchemy`'s built-in `.paginate()`** rather than manual
 `LIMIT`/`OFFSET`, and `per_page` is clamped to 200 so a client can't force-load the
@@ -424,7 +443,7 @@ The test suite exercises application logic — routing, auth, validation, owners
 serialization — none of which is Postgres-specific; nothing in `tests/` depends on
 TimescaleDB's hypertable behavior (that's covered by manual verification against a
 real instance, see below). SQLite in-memory means the suite needs no running database
-at all and is fast (55 tests in ~4s) and fully isolated from the dev database's real
+at all and is fast (63 tests in ~4s) and fully isolated from the dev database's real
 seeded data. `create_app()` takes an optional `config_object` parameter (defaulting to
 `Config`) specifically so tests can pass `TestConfig` instead — a fresh Flask app +
 in-memory SQLite database is created and torn down per test via a fixture, so tests
@@ -447,10 +466,11 @@ elsewhere) instead of re-proving it on every request.
 uv run pytest
 ```
 
-55 tests in `tests/`, covering:
+63 tests in `tests/`, covering:
 
-- `test_auth.py` — register/login: success, validation (missing fields, short
-  password), duplicate username, wrong credentials, password actually hashed.
+- `test_auth.py` — register/login: success, validation (missing fields, username too
+  long, each password complexity rule checked individually), duplicate username, wrong
+  credentials, password actually hashed.
 - `test_models.py` — `User` password hashing, `MotorAsset.is_owned_by()` in every
   combination (matching/non-matching username, no owner, no current user),
   `to_summary_dict`/`to_detail_dict` shape and field leakage (summary never includes
@@ -461,12 +481,12 @@ uv run pytest
   metrics included.
 - `test_assets_update.py` — owner can update, non-owner gets `403` *and* the change is
   verified not to have applied, an unassigned-owner asset is unupdatable by anyone,
-  unknown-field/empty-name validation, partial updates leave other fields alone, plus
-  admin coverage: admin can edit an asset owned by someone else, admin can edit an
-  unowned asset, admin can reassign `owner` to another username, admin can unset
-  `owner` (`null`), reassigning to an unknown username is `400`, and a non-admin
-  non-owner sending `owner` still gets `403` (ownership is checked before field
-  validation).
+  unknown-field/empty-name/over-max-length validation for `name`/`description`/
+  `location`, partial updates leave other fields alone, plus admin coverage: admin can
+  edit an asset owned by someone else, admin can edit an unowned asset, admin can
+  reassign `owner` to another username, admin can unset `owner` (`null`), reassigning
+  to an unknown username is `400`, and a non-admin non-owner sending `owner` still gets
+  `403` (ownership is checked before field validation).
 - `test_health.py` — trivial liveness checks.
 
 Run against an in-memory SQLite database (`TestConfig` in `config.py`), not the real

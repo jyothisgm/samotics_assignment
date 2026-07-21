@@ -95,6 +95,41 @@ def test_rejects_empty_name(client, auth_header, make_user, make_asset):
     assert response.status_code == 400
 
 
+def test_rejects_name_over_max_length(client, auth_header, make_user, make_asset):
+    owner = make_user(username="owner1")
+    asset = make_asset(owner=owner)
+
+    response = client.patch(
+        f"/assets/{asset.id}", json={"name": "x" * 201}, headers=auth_header(owner)
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "'name' must be at most 200 characters"}
+
+
+def test_rejects_description_over_max_length(client, auth_header, make_user, make_asset):
+    owner = make_user(username="owner1")
+    asset = make_asset(owner=owner)
+
+    response = client.patch(
+        f"/assets/{asset.id}",
+        json={"description": "x" * 1001},
+        headers=auth_header(owner),
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "'description' must be at most 1000 characters"}
+
+
+def test_rejects_location_over_max_length(client, auth_header, make_user, make_asset):
+    owner = make_user(username="owner1")
+    asset = make_asset(owner=owner)
+
+    response = client.patch(
+        f"/assets/{asset.id}", json={"location": "x" * 201}, headers=auth_header(owner)
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "'location' must be at most 200 characters"}
+
+
 def test_partial_update_leaves_other_fields_untouched(
     client, auth_header, make_user, make_asset
 ):

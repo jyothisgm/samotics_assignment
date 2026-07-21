@@ -32,21 +32,34 @@ describe('Login', () => {
     expect(component.mode()).toBe('login');
   });
 
-  it('does not require a 6-character password in login mode', () => {
+  it('does not require a complex password in login mode', () => {
     component.form.controls.username.setValue('admin');
-    component.form.controls.password.setValue('admin'); // 5 characters
+    component.form.controls.password.setValue('admin');
     expect(component.form.valid).toBeTrue();
   });
 
-  it('requires a 6-character password in register mode', () => {
+  it('requires a complex password in register mode', () => {
     component.setMode('register');
     fixture.detectChanges();
 
     component.form.controls.username.setValue('newuser');
+
     component.form.controls.password.setValue('short');
     expect(component.form.valid).toBeFalse();
 
-    component.form.controls.password.setValue('longenough');
+    component.form.controls.password.setValue('alllowercase123!');
+    expect(component.form.valid).toBeFalse();
+
+    component.form.controls.password.setValue('ALLUPPERCASE123!');
+    expect(component.form.valid).toBeFalse();
+
+    component.form.controls.password.setValue('NoNumberHere!');
+    expect(component.form.valid).toBeFalse();
+
+    component.form.controls.password.setValue('NoSymbolHere123');
+    expect(component.form.valid).toBeFalse();
+
+    component.form.controls.password.setValue('Password123!');
     expect(component.form.valid).toBeTrue();
   });
 
@@ -82,10 +95,10 @@ describe('Login', () => {
     fixture.detectChanges();
 
     component.form.controls.username.setValue('newuser');
-    component.form.controls.password.setValue('password123');
+    component.form.controls.password.setValue('Password123!');
     component.submit();
 
-    expect(authServiceStub.register).toHaveBeenCalledWith('newuser', 'password123');
+    expect(authServiceStub.register).toHaveBeenCalledWith('newuser', 'Password123!');
   });
 
   it('shows the server error message on failure', () => {
